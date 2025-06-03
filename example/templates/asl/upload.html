@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Reconocedor de símbolos ASL</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{
+    --bg:#f4f6f8;--card:#fff;--accent:#0066ff;--radius:12px;
+    --shadow:0 4px 10px rgba(0,0,0,.08);--text:#222;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  body{background:var(--bg);display:flex;justify-content:center;min-height:100vh;padding:20px;color:var(--text)}
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+        width:100%;max-width:480px;padding:24px;display:flex;flex-direction:column;gap:22px}
+  h1{text-align:center;font-size:1.8rem;font-weight:700}
+  form{display:flex;flex-direction:column;gap:16px;align-items:center}
+  input[type=file]{border:1px dashed #aaa;padding:12px;border-radius:8px;width:100%}
+  button{background:var(--accent);color:#fff;border:none;padding:10px 20px;border-radius:8px;
+         font-size:1rem;cursor:pointer;transition:.2s}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  #rotate-btn{background:#555}
+  #preview{max-width:100%;border-radius:var(--radius);border:1px solid #ddd;display:none}
+  ul{list-style:none;text-align:center}
+  li{padding:2px 0}
+  .prob strong{font-size:1.4rem}
+  /* loader */
+  #loader{position:fixed;inset:0;display:flex;justify-content:center;align-items:center;
+          background:rgba(255,255,255,.7);backdrop-filter:blur(2px);z-index:10;visibility:hidden}
+  #loader.show{visibility:visible}
+  .spinner{width:48px;height:48px;border:6px solid #ccc;border-top-color:var(--accent);
+           border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(min-width:600px){h1{font-size:2rem}}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Reconocedor de símbolos ASL</h1>
+
+  <form id="asl-form" method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.image }}
+    <canvas id="canvas" style="display:none"></canvas>
+    {{ form.rotated }}
+    <button type="button" id="rotate-btn" style="display:none">↻ Rotar 45°</button>
+    <button type="submit" id="submit-btn" disabled>Subir imagen</button>
+  </form>
+
+  <!-- preview -->
+  <img id="preview"
+       src="{% if img_data %}{{ img_data }}{% else %}#{% endif %}"
+       alt="preview">
+
+  {% if preds %}
+    <div class="prob">
+      <h2>Predicción principal</h2>
+      <p><strong>{{ preds.0.0 }}</strong> ({{ preds.0.1 }} %)</p>
+    </div>
+    <h3>Top 5</h3>
+    <ul>
+      {% for lbl, p in preds %}
+        <li>{{ lbl }} — {{ p }} %</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if error %}
+    <p style="color:red;text-align:center">{{ error }}</p>
+  {% endif %}
+</div>
+
+<!-- loader -->
+<div id="loader"><div class="spinner"></div></div>
+
+<script>
+const fileInput = document.querySelector('input[type=file]');
+const preview   = document.getElementById('preview');
+const rotateBtn = document.getElementById('rotate-btn');
+const submitBtn = document.getElementById('submit-btn');
+const hidden    = document.querySelector('input[name=rotated]');
+const canvas    = document.getElementById('canvas');
+const ctx       = canvas.getContext('2d');
+const loader    = document.getElementById('loader');
+let angle = 0, img = new Image();
+
+/* --------- Mostrar preview si vino desde el servidor --------- */
+window.addEventListener('DOMContentLoaded',()=>{
+  if(preview.src.startsWith('data:')){   // significa que img_data existe
+    preview.style.display='block';
+    rotateBtn.style.display='inline-block';
+    submitBtn.disabled=false;
+    img.src=preview.src;                 // para poder seguir rotando
+  }
+});
+
+/* --------- File input ---------- */
+fileInput.onchange=()=>{
+  const file=fileInput.files[0]; if(!file) return;
+  angle=0;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    img.onload=()=>{
+      draw(); preview.style.display='block';
+      rotateBtn.style.display='inline-block'; submitBtn.disabled=false;
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+/* --------- Rotación --------- */
+rotateBtn.onclick=()=>{angle=(angle+45)%360; draw();}
+
+function draw(){
+  const rad=angle*Math.PI/180, size=Math.max(img.width,img.height);
+  canvas.width=canvas.height=size;
+  ctx.clearRect(0,0,size,size);
+  ctx.save(); ctx.translate(size/2,size/2); ctx.rotate(rad);
+  ctx.drawImage(img,-img.width/2,-img.height/2); ctx.restore();
+  preview.src=canvas.toDataURL('image/jpeg',0.85); hidden.value=preview.src;
+}
+
+/* --------- Loader --------- */
+document.getElementById('asl-form').onsubmit=()=>{
+  if(!hidden.value && preview.src.startsWith('data:')) hidden.value=preview.src;
+  loader.classList.add('show'); // muestra spinner
+};
+</script>
+</body>
+</html>
