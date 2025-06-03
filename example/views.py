@@ -3,6 +3,7 @@ import os, tempfile, requests, base64, io
 from pathlib import Path
 from django.shortcuts import render
 from PIL import Image
+from django.http import JsonResponse
 
 import torch
 import torch.nn as nn
@@ -121,3 +122,6 @@ def upload_view(request):
 
         ctx["form"] = form
     return render(request, "asl/upload.html", ctx)
+
+def healthcheck(request):
+    return JsonResponse({"status": "ok"})
